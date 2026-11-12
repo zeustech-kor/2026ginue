@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>실과 바늘 상호 평가 시스템</title>
+    <title>대바늘로 수세미 만들기 동료평가</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
     <!-- 헤더 -->
     <header class="bg-indigo-600 text-white shadow-md">
         <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold flex items-center gap-2">🧶 실과 바늘 상호 평가 시스템</h1>
+            <h1 class="text-xl font-bold flex items-center gap-2">🧶 대바늘로 수세미 만들기 동료평가</h1>
             <div class="flex items-center gap-3">
                 <span id="current-evaluator-badge" class="bg-indigo-700 text-sm px-3 py-1 rounded-full font-medium hidden">
                     평가자: <span id="evaluator-name-display" class="font-bold"></span>
@@ -295,8 +295,8 @@
 
     <script>
         // ▼ Supabase 대시보드 > Project Settings > API 에서 복사해 넣으세요 (anon 공개 키는 노출돼도 됩니다)
-        const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
-        const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
+               const SUPABASE_URL = "https://pxcdzbqmpuookytcukdu.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2R6YnFtcHVvb2t5dGN1a2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NDI4MTUsImV4cCI6MjExMDAxODgxNX0.ghL4QbMO9DPkqRfsSEMMNJB3Lc50kDYIRmxDpioYMeE";
         const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const STUDENT_NO_RE = /^[A-Z0-9]{8,9}$/;
