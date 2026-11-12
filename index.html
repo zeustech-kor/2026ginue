@@ -236,6 +236,28 @@
             </div>
 
             <div class="bg-white rounded-2xl shadow-lg p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900">🕒 평가자 접속 · 제출 현황</h3>
+                        <p class="text-gray-500 text-sm">접속 시각은 로그인 기준, 저장 시각은 점수·피드백이 서버에 마지막으로 저장된 시각입니다. (한국 시간)</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 text-sm">
+                                <th class="p-3 rounded-l-xl">평가자</th><th class="p-3 text-center">상태</th>
+                                <th class="p-3">최초 접속</th><th class="p-3">마지막 접속</th>
+                                <th class="p-3 text-center">접속 횟수</th><th class="p-3 text-center">진행</th>
+                                <th class="p-3">마지막 저장</th><th class="p-3 rounded-r-xl">전체 제출 완료</th>
+                            </tr>
+                        </thead>
+                        <tbody id="status-tbody" class="divide-y divide-gray-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg p-6">
                 <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900">🧾 평가자별 평가 내용</h3>
@@ -256,7 +278,7 @@
                                 <th class="p-3 text-center">단수(15)</th><th class="p-3 text-center">코빠짐(10)</th>
                                 <th class="p-3 text-center">모양(5)</th><th class="p-3 text-center">균일성(5)</th>
                                 <th class="p-3 text-center">실갈라짐(5)</th><th class="p-3 text-center">마무리(5)</th>
-                                <th class="p-3 text-center">총점(45)</th><th class="p-3 rounded-r-xl">피드백</th>
+                                <th class="p-3 text-center">총점(45)</th><th class="p-3">피드백</th><th class="p-3 rounded-r-xl">저장 시각</th>
                             </tr>
                         </thead>
                         <tbody id="evaluator-detail-tbody" class="divide-y divide-gray-100 text-sm"></tbody>
@@ -663,8 +685,42 @@
         let allEvals = [];
         const pById = id => participants.find(p => p.id === id) || { id, name: '?', title: '' };
 
+        const fmtTime = iso => iso ? new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '-';
+
+        function evalStats(id) {
+            const rows = allEvals.filter(e => e.evaluator_id === id);
+            const done = rows.filter(isComplete).length;
+            const total = participants.length - 1;
+            const last = rows.reduce((m, e) => (!m || new Date(e.updated_at) > new Date(m)) ? e.updated_at : m, null);
+            return { saved: rows.length, done, total, last, finished: total > 0 && done >= total };
+        }
+
+        function renderStatus() {
+            const tbody = document.getElementById('status-tbody');
+            tbody.innerHTML = participants.map(p => {
+                const st = evalStats(p.id);
+                let badge = '<span class="bg-gray-100 text-gray-500 px-2 py-1 rounded-full text-xs font-bold">미접속</span>';
+                if (st.finished) badge = '<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold">완료</span>';
+                else if (st.saved > 0) badge = '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-full text-xs font-bold">진행 중</span>';
+                else if (p.last_login_at) badge = '<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-full text-xs font-bold">접속만 함</span>';
+                return `<tr class="hover:bg-gray-50 transition">
+                    <td class="p-3 font-bold text-gray-900">${p.id}번 ${esc(p.name)}</td>
+                    <td class="p-3 text-center">${badge}</td>
+                    <td class="p-3 text-gray-600 whitespace-nowrap">${fmtTime(p.first_login_at)}</td>
+                    <td class="p-3 text-gray-600 whitespace-nowrap">${fmtTime(p.last_login_at)}</td>
+                    <td class="p-3 text-center">${p.login_count || 0}회</td>
+                    <td class="p-3 text-center font-semibold">${st.done} / ${st.total}</td>
+                    <td class="p-3 text-gray-600 whitespace-nowrap">${fmtTime(st.last)}</td>
+                    <td class="p-3 text-gray-600 whitespace-nowrap">${st.finished ? fmtTime(st.last) : '-'}</td>
+                </tr>`;
+            }).join('');
+        }
+
         async function loadAllEvals() {
-            try { allEvals = (await rpc('admin_all_evals', { p_admin_pw: adminPw })) || []; }
+            try {
+                const [pl, ev] = await Promise.all([rpc('admin_get_participants', { p_admin_pw: adminPw }), rpc('admin_all_evals', { p_admin_pw: adminPw })]);
+                participants = pl; allEvals = ev || [];
+            }
             catch (e) { alert('평가 내용을 불러오지 못했습니다: ' + e.message); return; }
             const sel = document.getElementById('evaluator-select');
             const keep = sel.value;
@@ -674,6 +730,7 @@
                 return `<option value="${p.id}">${p.id}번 ${esc(p.name)} (완료 ${n}/${total})</option>`;
             }).join('');
             sel.value = keep;
+            renderStatus();
             renderEvaluatorDetail();
         }
 
@@ -687,7 +744,8 @@
             allEvals.filter(e => e.evaluator_id === evId).forEach(e => mine[e.target_id] = e);
             const done = Object.values(mine).filter(isComplete);
             const avg = done.length ? (done.reduce((a, d) => a + sumOf(d), 0) / done.length).toFixed(1) : '-';
-            summary.textContent = `${evId}번 ${pById(evId).name} · 완료 ${done.length} / ${participants.length - 1} · 부여한 평균 총점 ${avg}점`;
+            const me = pById(evId), st = evalStats(evId);
+            summary.textContent = `${evId}번 ${me.name} · 완료 ${done.length} / ${participants.length - 1} · 부여한 평균 총점 ${avg}점 · 최초 접속 ${fmtTime(me.first_login_at)} · 마지막 접속 ${fmtTime(me.last_login_at)} (${me.login_count || 0}회) · 마지막 저장 ${fmtTime(st.last)}`;
             participants.filter(p => p.id !== evId).forEach(t => {
                 const d = mine[t.id];
                 const tr = document.createElement('tr');
@@ -699,11 +757,12 @@
                     <td class="p-3 text-center">${dash(d.s3)}</td><td class="p-3 text-center">${dash(d.s4)}</td>
                     <td class="p-3 text-center">${dash(d.s5)}</td><td class="p-3 text-center">${dash(d.s6)}</td>
                     <td class="p-3 text-center font-extrabold text-indigo-600">${isComplete(d) ? sumOf(d) + '점' : '<span class="text-amber-600 text-xs">미완료</span>'}</td>
-                    <td class="p-3 text-gray-600 text-xs">${d.feedback ? esc(d.feedback) : '<span class="text-gray-300">-</span>'}</td>` : `
+                    <td class="p-3 text-gray-600 text-xs">${d.feedback ? esc(d.feedback) : '<span class="text-gray-300">-</span>'}</td>
+                    <td class="p-3 text-gray-500 text-xs whitespace-nowrap">${fmtTime(d.updated_at)}</td>` : `
                     <td class="p-3 font-bold text-gray-400">#${t.id}</td>
                     <td class="p-3 text-gray-500">${esc(t.name)}</td>
                     <td colspan="7" class="p-3 text-center text-gray-400 text-xs italic">아직 평가하지 않음</td>
-                    <td class="p-3 text-gray-300 text-xs">-</td>`;
+                    <td class="p-3 text-gray-300 text-xs">-</td><td class="p-3 text-gray-300 text-xs">-</td>`;
                 tbody.appendChild(tr);
             });
         }
@@ -711,29 +770,37 @@
         function exportEvalsXLSX() {
             if (!allEvals.length) { alert('내보낼 평가 내용이 없습니다.'); return; }
             const wb = XLSX.utils.book_new();
-            const all = [["평가자번호","평가자이름","작품번호","작가이름","작품명","단수(15)","코빠짐(10)","모양(5)","균일성(5)","실갈라짐(5)","마무리(5)","총점(45)","피드백"]];
+            const all = [["평가자번호","평가자이름","작품번호","작가이름","작품명","단수(15)","코빠짐(10)","모양(5)","균일성(5)","실갈라짐(5)","마무리(5)","총점(45)","피드백","저장 시각"]];
             allEvals.forEach(e => {
                 const a = pById(e.evaluator_id), t = pById(e.target_id);
-                all.push([a.id, a.name, t.id, t.name, t.title, e.s1 ?? '', e.s2 ?? '', e.s3 ?? '', e.s4 ?? '', e.s5 ?? '', e.s6 ?? '', sumOf(e) ?? '미완료', e.feedback]);
+                all.push([a.id, a.name, t.id, t.name, t.title, e.s1 ?? '', e.s2 ?? '', e.s3 ?? '', e.s4 ?? '', e.s5 ?? '', e.s6 ?? '', sumOf(e) ?? '미완료', e.feedback, fmtTime(e.updated_at)]);
             });
             const ws0 = XLSX.utils.aoa_to_sheet(all);
-            ws0['!cols'] = [8,12,8,12,18,8,10,8,8,10,8,8,40].map(w => ({ wch: w }));
+            ws0['!cols'] = [8,12,8,12,18,8,10,8,8,10,8,8,40,18].map(w => ({ wch: w }));
             XLSX.utils.book_append_sheet(wb, ws0, '전체');
 
             participants.forEach(ev => {
                 const mine = {};
                 allEvals.filter(e => e.evaluator_id === ev.id).forEach(e => mine[e.target_id] = e);
-                const rows = [["작품번호","작가이름","작품명","단수(15)","코빠짐(10)","모양(5)","균일성(5)","실갈라짐(5)","마무리(5)","총점(45)","피드백"]];
+                const rows = [["작품번호","작가이름","작품명","단수(15)","코빠짐(10)","모양(5)","균일성(5)","실갈라짐(5)","마무리(5)","총점(45)","피드백","저장 시각"]];
                 participants.filter(p => p.id !== ev.id).forEach(t => {
                     const d = mine[t.id];
-                    rows.push(hasAny(d) ? [t.id, t.name, t.title, d.s1 ?? '', d.s2 ?? '', d.s3 ?? '', d.s4 ?? '', d.s5 ?? '', d.s6 ?? '', sumOf(d) ?? '미완료', d.feedback]
-                                : [t.id, t.name, t.title, '', '', '', '', '', '', '미평가', '']);
+                    rows.push(hasAny(d) ? [t.id, t.name, t.title, d.s1 ?? '', d.s2 ?? '', d.s3 ?? '', d.s4 ?? '', d.s5 ?? '', d.s6 ?? '', sumOf(d) ?? '미완료', d.feedback, fmtTime(d.updated_at)]
+                                : [t.id, t.name, t.title, '', '', '', '', '', '', '미평가', '', '']);
                 });
                 const ws = XLSX.utils.aoa_to_sheet(rows);
-                ws['!cols'] = [8,12,18,8,10,8,8,10,8,8,40].map(w => ({ wch: w }));
+                ws['!cols'] = [8,12,18,8,10,8,8,10,8,8,40,18].map(w => ({ wch: w }));
                 const sheetName = `${ev.id}번_${ev.name}`.replace(/[\\\/?*\[\]:]/g, '').slice(0, 31);
                 XLSX.utils.book_append_sheet(wb, ws, sheetName);
             });
+            const stRows = [["평가자번호","평가자이름","최초 접속","마지막 접속","접속 횟수","완료 수","전체 작품 수","마지막 저장","전체 제출 완료"]];
+            participants.forEach(p => {
+                const st = evalStats(p.id);
+                stRows.push([p.id, p.name, fmtTime(p.first_login_at), fmtTime(p.last_login_at), p.login_count || 0, st.done, st.total, fmtTime(st.last), st.finished ? fmtTime(st.last) : '-']);
+            });
+            const wsSt = XLSX.utils.aoa_to_sheet(stRows);
+            wsSt['!cols'] = [10,12,16,16,10,8,12,16,16].map(w => ({ wch: w }));
+            XLSX.utils.book_append_sheet(wb, wsSt, '접속·제출현황');
             XLSX.writeFile(wb, "실과바늘_평가자별_평가내용.xlsx");
         }
 
